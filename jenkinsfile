@@ -1,0 +1,88 @@
+pipeline {
+    agent any
+
+    triggers {
+        pollSCM('H/5 * * * *') // Trigger on changes every 5 minutes
+    }
+
+    stages {
+        stage('Checkout Code') {
+            steps {
+                echo 'Cloning repository...'
+                git branch: 'main', url: 'git@github.com:username/repository.git' // Replace with your repository
+            }
+        }
+
+        stage('Code Quality Analysis') {
+            steps {
+                echo 'Running SonarQube analysis...'
+                withSonarQubeEnv('SonarQube') {
+                    sh './gradlew sonarqube' // Adjust based on your build tool
+                }
+            }
+        }
+
+        stage('Check Quality Gate') {
+            steps {
+                timeout(time: 5, unit: 'MINUTES') {
+                    script {
+                        def qualityGate = waitForQualityGate()
+                        if (qualityGate.status != 'OK') {
+                            error "Pipeline aborted due to quality gate failure: ${qualityGate.status}"
+                        }
+                    }
+                }
+            }
+        }
+
+        stage('Code Coverage') {
+            steps {
+                echo 'Generating code coverage report...'
+                sh './gradlew test jacocoTestReport' // Adjust for your language/tool
+                publishHTML([reportDir: 'build/reports/jacoco/test/html', reportFiles: 'index.html', reportName: 'Code Coverage'])
+            }
+        }
+
+        stage('Cyclomatic Complexity Analysis') {
+            steps {
+                echo 'Calculating cyclomatic complexity...'
+                sh 'lizard -l java src/' // Replace for your language
+                archiveArtifacts 'lizard-report.txt'
+            }
+        }
+
+        stage('Security Vulnerability Scan') {
+            steps {
+                echo 'Running OWASP Dependency-Check...'
+                sh '''
+                dependency-check --project "MyProject" --scan . --out dependency-check-report.html
+                '''
+                archiveArtifacts 'dependency-check-report.html'
+                script {
+                    def report = readFile('dependency-check-report.html')
+                    if (!report.contains('Critical Vulnerabilities: 0')) {
+                        error 'Critical vulnerabilities detected! Build failed.'
+                    }
+                }
+            }
+        }
+    }
+
+    post {
+        success {
+            emailext subject: "Build Successful: ${env.JOB_NAME} #${env.BUILD_NUMBER}",
+                     body: "Good news! The build was successful.\nCheck it here: ${env.BUILD_URL}",
+                     to: 'team@example.com'
+        }
+        failure {
+            emailext subject: "Build Failed: ${env.JOB_NAME} #${env.BUILD_NUMBER}",
+                     body: "Unfortunately, the build failed.\nCheck details here: ${env.BUILD_URL}",
+                     to: 'team@example.com'
+        }
+        always {
+            slackSend channel: '#ci-pipeline',
+                      color: currentBuild.result == 'SUCCESS' ? 'good' : 'danger',
+                      message: "Build ${currentBuild.result}: ${env.JOB_NAME} #${env.BUILD_NUMBER}\n${env.BUILD_URL}"
+        }
+    }
+}

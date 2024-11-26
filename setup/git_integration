@@ -1,0 +1,72 @@
+Using Git as Source Code Management (SCM) in Jenkins
+This guide explains how to configure Jenkins to pull code from a Git repository, such as GitHub or GitLab, step-by-step.
+
+Steps
+
+1. Install Git Plugin in Jenkins
+Log in to Jenkins at http://<YOUR_VM_IP>:8080.
+Navigate to Manage Jenkins > Manage Plugins.
+In the Available tab, search for Git Plugin.
+Select Git Plugin and click Install without restart.
+
+
+
+2. Install Git on the System
+Ensure Git is installed on the server running Jenkins:
+
+sudo apt update
+sudo apt install -y git
+
+
+3. Configure Git Credentials in Jenkins
+To enable Jenkins to access a Git repository:
+
+A. Generate SSH Key
+ssh-keygen -t rsa -b 2048 -f ~/.ssh/id_rsa -N ""
+cat ~/.ssh/id_rsa.pub
+
+For GitLab:
+Go to User Settings > SSH Keys > Add SSH Key.
+
+
+B. Add Credentials in Jenkins
+Navigate to Manage Jenkins > Manage Credentials > (Global).
+Add a new credential:
+Kind: SSH Username with Private Key.
+Username: Your Git username.
+Private Key: Paste the content of ~/.ssh/id_rsa.
+
+
+
+4. Create a Jenkins Job to Pull Code
+Create a New Job:
+
+Go to the Jenkins Dashboard.
+Click New Item, select Freestyle Project, and provide a name.
+Click OK.
+Configure Source Code Management (SCM):
+
+Under the Source Code Management section, select Git.
+Enter the repository URL:
+For HTTPS: https://github.com/<user>/<repo>.git.
+For SSH: git@github.com:<user>/<repo>.git.
+Select the credentials added earlier.
+(Optional) Specify the branch to build, e.g., main.
+Build Triggers:
+
+Poll SCM:
+Enable it and set a schedule, e.g., H/5 * * * * (poll every 5 minutes).
+GitHub/GitLab Webhook:
+Add a webhook in the repository pointing to http://<JENKINS_URL>/github-webhook/.
+
+Add Build Steps:
+
+Define build steps, such as running a shell script or executing tests.
+
+echo "Building the project"
+./build.sh
+
+5. Save the Job:
+
+Click Save.
+Trigger a build manually to test the configuration.
